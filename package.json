@@ -1,11 +1,19 @@
 {
   "name": "project-management-tool",
   "version": "0.1.0",
+  "scripts": {
+    "dev:app": "npm run dev -w app",
+    "dev:server": "npm run dev -w server",
+    "dev": "concurrently npm:dev:*"
+  },
   "workspaces": [
     "app",
     "server"
   ],
   "author": "yigitcanustek@gmail.com",
   "license": "GPL-3.0-only",
-  "description": "Issue Tracker and Project Management Tool"
+  "description": "Issue Tracker and Project Management Tool",
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
 }
