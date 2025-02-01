@@ -15,6 +15,9 @@ const FlowVisualization: React.FC = () => {
     { x: number; y: number; width: number; height: number }[]
   >([]);
 
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [offset, setOffset] = useState<{ x: number; y: number } | null>(null);
+
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -25,8 +28,14 @@ const FlowVisualization: React.FC = () => {
           event.clientX - rect.left - ((event.clientX - rect.left) % 20);
         const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
 
-        // If there's a previous position, draw a line to the new position
-        if (lastPosition) {
+        const rectangle = rectangles.find(
+          (rectangle) =>
+            x > rectangle.x &&
+            x < rectangle.x + rectangle.width &&
+            y > rectangle.y &&
+            y < rectangle.y + rectangle.height
+        );
+        if (!rectangle && lastPosition) {
           ctx.beginPath();
           ctx.moveTo(lastPosition.x, lastPosition.y);
           ctx.lineTo(x, y);
@@ -138,31 +147,99 @@ const FlowVisualization: React.FC = () => {
   };
 
   const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    setLastPosition(() => {
-      const canvas = canvasRef.current;
-      const rect = canvas!.getBoundingClientRect();
-      const x = event.clientX - rect.left - ((event.clientX - rect.left) % 20);
-      const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
-      return { x: x, y: y };
-    });
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const rect = canvas.getBoundingClientRect();
+        const x =
+          event.clientX - rect.left - ((event.clientX - rect.left) % 20);
+        const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
+
+        const index = rectangles.findIndex(
+          (rectangle) =>
+            x >= rectangle.x &&
+            x <= rectangle.x + rectangle.width &&
+            y >= rectangle.y &&
+            y <= rectangle.y + rectangle.height
+        );
+
+        if (index !== -1) {
+          // Start dragging the selected rectangle
+          setDraggingIndex(index);
+
+          // Store initial offset to keep the rectangle's relative position while dragging
+          setOffset({
+            x: x - rectangles[index].x,
+            y: y - rectangles[index].y,
+          });
+        }
+
+        setLastPosition(() => {
+          const canvas = canvasRef.current;
+          const rect = canvas!.getBoundingClientRect();
+          const x =
+            event.clientX - rect.left - ((event.clientX - rect.left) % 20);
+          const y =
+            event.clientY - rect.top - ((event.clientY - rect.top) % 20);
+          return { x: x, y: y };
+        });
+      }
+    }
   };
 
   const handleDoubleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+    if (!canvas) return;
 
-      // Define rectangle size
-      const width = 100; // Width of rectangle
-      const height = 100; // Height of rectangle
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
 
-      // Add rectangle to the state
+    // Define rectangle size
+    const width = 100;
+    const height = 100;
+
+    // Check if a rectangle already exists at this position
+    const exists = rectangles.some(
+      (rectangle) =>
+        x >= rectangle.x &&
+        x <= rectangle.x + rectangle.width &&
+        y >= rectangle.y &&
+        y <= rectangle.y + rectangle.height
+    );
+
+    if (!exists) {
+      // Add rectangle to state if it does not already exist
       setRectangles((prev) => [...prev, { x, y, width, height }]);
     }
   };
 
+  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (draggingIndex === null || offset === null) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    // Update rectangle position while dragging
+    setRectangles((prev) =>
+      prev.map((rectangle, i) =>
+        i === draggingIndex
+          ? { ...rectangle, x: x - offset.x, y: y - offset.y }
+          : rectangle
+      )
+    );
+  };
+
+  // Handle Mouse Up (Release)
+  const handleMouseUp = () => {
+    setDraggingIndex(null);
+    setOffset(null);
+  };
   return (
     <>
       <Button
@@ -170,6 +247,7 @@ const FlowVisualization: React.FC = () => {
         onClick={() => {
           setLines([]); // Clear all lines
           setLastPosition(null);
+          setRectangles([]);
           const canvas = canvasRef.current;
           if (canvas) {
             const ctx = canvas.getContext("2d");
@@ -184,6 +262,8 @@ const FlowVisualization: React.FC = () => {
       </Button>
       <canvas
         ref={canvasRef}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onClick={handleCanvasClick}
         onMouseDown={handleMouseDown}
         onContextMenu={handleRightClick} // Handle right-click to undo
