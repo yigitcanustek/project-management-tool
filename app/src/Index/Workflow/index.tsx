@@ -11,6 +11,10 @@ const FlowVisualization: React.FC = () => {
     { start: { x: number; y: number }; end: { x: number; y: number } }[]
   >([]);
 
+  const [rectangles, setRectangles] = useState<
+    { x: number; y: number; width: number; height: number }[]
+  >([]);
+
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -43,20 +47,33 @@ const FlowVisualization: React.FC = () => {
     }
   };
 
-  const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    const dotSize = 2;
-    const gap = 20;
+  const drawGrid = useCallback(
+    (ctx: CanvasRenderingContext2D) => {
+      const dotSize = 2;
+      const gap = 20;
 
-    // Draw dots
-    for (let y = 0; y < ctx.canvas.height; y += gap) {
-      for (let x = 0; x < ctx.canvas.width; x += gap) {
-        ctx.beginPath();
-        ctx.arc(x, y, dotSize / 2, 0, Math.PI * 2);
-        ctx.fillStyle = "#aaa"; // Dot color
-        ctx.fill();
+      // Draw dots
+      for (let y = 0; y < ctx.canvas.height; y += gap) {
+        for (let x = 0; x < ctx.canvas.width; x += gap) {
+          const isInsideRectangle = rectangles.some(
+            (rect) =>
+              x > rect.x &&
+              x < rect.x + rect.width &&
+              y > rect.y &&
+              y < rect.y + rect.height
+          );
+
+          if (!isInsideRectangle) {
+            ctx.beginPath();
+            ctx.arc(x, y, dotSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = "#aaa"; // Dot color
+            ctx.fill();
+          }
+        }
       }
-    }
-  }, []);
+    },
+    [rectangles]
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -92,9 +109,18 @@ const FlowVisualization: React.FC = () => {
           ctx.lineWidth = 1;
           ctx.stroke();
         });
+
+        rectangles.forEach((rect) => {
+          ctx.beginPath();
+          ctx.rect(rect.x, rect.y, rect.width, rect.height);
+          ctx.fillStyle = "rgba(200, 200, 255, 0.5)"; // Rectangle fill color
+          ctx.fill();
+          ctx.strokeStyle = "#333"; // Rectangle border color
+          ctx.stroke();
+        });
       }
     }
-  }, [lines, drawGrid]);
+  }, [drawGrid, lines, rectangles]);
 
   useEffect(() => {
     redrawCanvas();
@@ -121,6 +147,22 @@ const FlowVisualization: React.FC = () => {
     });
   };
 
+  const handleDoubleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+
+      // Define rectangle size
+      const width = 100; // Width of rectangle
+      const height = 100; // Height of rectangle
+
+      // Add rectangle to the state
+      setRectangles((prev) => [...prev, { x, y, width, height }]);
+    }
+  };
+
   return (
     <>
       <Button
@@ -145,6 +187,7 @@ const FlowVisualization: React.FC = () => {
         onClick={handleCanvasClick}
         onMouseDown={handleMouseDown}
         onContextMenu={handleRightClick} // Handle right-click to undo
+        onDoubleClick={handleDoubleClick}
         style={{
           display: "block",
           width: "100%",
