@@ -75,114 +75,83 @@ const FlowVisualization: React.FC = () => {
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        const rect = canvas.getBoundingClientRect();
-        // const x =
-        //   event.clientX - rect.left - ((event.clientX - rect.left) % 20);
-        // const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
+    if (!canvas) return;
 
-        const mouseX = event.clientX - rect.left;
-        const mouseY = event.clientY - rect.top;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left - ((event.clientX - rect.left) % 20);
+    const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
 
-        // const rectangle = drawingComponents.find(
-        //   (rectangle) =>
-        //     rectangle.componentType === "Rectangle" &&
-        //     x > rectangle.rectangleAttr.start.x &&
-        //     x <
-        //       rectangle.rectangleAttr.start.x + rectangle.rectangleAttr.width &&
-        //     y > rectangle.rectangleAttr.start.y &&
-        //     y < rectangle.rectangleAttr.start.y + rectangle.rectangleAttr.height
-        // );
-        // if (!rectangle && lastPosition) {
-        //   ctx.beginPath();
-        //   ctx.moveTo(lastPosition.x, lastPosition.y);
-        //   ctx.lineTo(x, y);
-        //   ctx.strokeStyle = "#bbb"; // Line color
-        //   ctx.lineWidth = 1;
-        //   ctx.stroke();
-        //   // setDrawingComponents((prev) =>
-        //   //   [
-        //   //     ...(prev ?? []),
-        //   //     ...[
-        //   //       {
-        //   //         componentType: "Rectangle" as const,
-        //   //         rectangleAttr: {
-        //   //           backgroundColor: "#000",
-        //   //           width: RECT_WIDTH,
-        //   //           height: RECT_HEIGHT,
-        //   //           start: { x: lastPosition.x, y: lastPosition.y },
-        //   //           end: { x, y },
-        //   //         },
-        //   //       },
-        //   //     ],
-        //   //   ].flat()
-        //   // );
-        // }
-        if (
-          hoveredRectangle &&
-          hoveredRectangle.componentType === "Rectangle"
-        ) {
-          const { start, width, height } = hoveredRectangle.rectangleAttr;
+    if (hoveredRectangle && hoveredRectangle.componentType === "Rectangle") {
+      const { start, width, height } = hoveredRectangle.rectangleAttr;
+      console.log(hoveredRectangle, x, y);
+      // Ensure midpoint coordinates align with the snapped grid
+      const midpoints = [
+        {
+          x: Math.round((start.x + width / 2) / 20) * 20,
+          y: Math.round(start.y / 20) * 20,
+        }, // Top
+        {
+          x: Math.round((start.x + width) / 20) * 20,
+          y: Math.round((start.y + height / 2) / 20) * 20,
+        }, // Right
+        {
+          x: Math.round((start.x + width / 2) / 20) * 20,
+          y: Math.round((start.y + height) / 20) * 20,
+        }, // Bottom
+        {
+          x: Math.round(start.x / 20) * 20,
+          y: Math.round((start.y + height / 2) / 20) * 20,
+        }, // Left
+      ];
 
-          // Midpoints
-          const midpoints = [
-            { x: start.x + width / 2, y: start.y }, // Top
-            { x: start.x + width, y: start.y + height / 2 }, // Right
-            { x: start.x + width / 2, y: start.y + height }, // Bottom
-            { x: start.x, y: start.y + height / 2 }, // Left
-          ];
+      // Find the closest midpoint
+      const clickedMidpoint = midpoints.find((point) => {
+        const distanceX = Math.abs(x - point.x);
+        const distanceY = Math.abs(y - point.y);
 
-          // Find the closest midpoint
-          const clickedMidpoint = midpoints.find(
-            (point) =>
-              Math.abs(mouseX - point.x) < 10 && Math.abs(mouseY - point.y) < 10
-          );
+        return distanceX <= 20 && distanceY <= 20; // Increased threshold to 20
+      });
 
-          if (clickedMidpoint) {
-            if (selectedMidpoint?.start) {
-              // If 'start' is already populated, store 'end' and finalize the connection
-              setDrawingComponents((prev) => [
-                ...prev,
-                {
-                  id: drawingComponents.length,
-                  componentType: "Connection",
-                  connectionAttr: {
-                    start: {
-                      rectangleId: selectedMidpoint.start!.rectangleId!,
-                      rectanglePointLocation: {
-                        x: selectedMidpoint.start!.x!,
-                        y: selectedMidpoint.start!.y!,
-                      },
-                    },
-                    end: {
-                      rectangleId: hoveredRectangle.id,
-                      rectanglePointLocation: {
-                        x: clickedMidpoint.x,
-                        y: clickedMidpoint.y,
-                      },
-                    },
+      console.log(clickedMidpoint);
+
+      if (clickedMidpoint) {
+        if (selectedMidpoint?.start) {
+          // If `start` already exists, create the `end` and finalize connection
+          setDrawingComponents((prev) => [
+            ...prev,
+            {
+              id: prev.length, // Ensure unique ID
+              componentType: "Connection",
+              connectionAttr: {
+                start: {
+                  rectangleId: selectedMidpoint.start!.rectangleId,
+                  rectanglePointLocation: {
+                    x: selectedMidpoint.start!.x,
+                    y: selectedMidpoint.start!.y,
                   },
                 },
-              ]);
-
-              setSelectedMidpoint(null); // Reset after pairing
-            } else {
-              // First click: Store 'start' point
-              setSelectedMidpoint({
-                start: {
+                end: {
                   rectangleId: hoveredRectangle.id,
-                  x: clickedMidpoint.x,
-                  y: clickedMidpoint.y,
+                  rectanglePointLocation: {
+                    x: clickedMidpoint.x,
+                    y: clickedMidpoint.y,
+                  },
                 },
-              });
-            }
-          }
-        }
+              },
+            },
+          ]);
 
-        // Update the last position
-        // setLastPosition({ x, y });
+          setSelectedMidpoint(null); // Reset after pairing
+        } else {
+          // First click: Store `start` midpoint
+          setSelectedMidpoint({
+            start: {
+              rectangleId: hoveredRectangle.id,
+              x: clickedMidpoint.x,
+              y: clickedMidpoint.y,
+            },
+          });
+        }
       }
     }
   };
@@ -353,16 +322,12 @@ const FlowVisualization: React.FC = () => {
         const index = drawingComponents.findIndex(
           (rectangle) =>
             rectangle.componentType === "Rectangle" &&
-            x >= rectangle.rectangleAttr.start.x + 5 &&
+            x >= rectangle.rectangleAttr.start.x &&
             x <=
-              rectangle.rectangleAttr.start.x +
-                rectangle.rectangleAttr.width -
-                5 &&
-            y >= rectangle.rectangleAttr.start.y + 5 &&
+              rectangle.rectangleAttr.start.x + rectangle.rectangleAttr.width &&
+            y >= rectangle.rectangleAttr.start.y &&
             y <=
-              rectangle.rectangleAttr.start.y +
-                rectangle.rectangleAttr.height -
-                5
+              rectangle.rectangleAttr.start.y + rectangle.rectangleAttr.height
         );
 
         if (index !== -1) {
@@ -377,16 +342,6 @@ const FlowVisualization: React.FC = () => {
             });
           }
         }
-
-        // setLastPosition(() => {
-        //   const canvas = canvasRef.current;
-        //   const rect = canvas!.getBoundingClientRect();
-        //   const x =
-        //     event.clientX - rect.left - ((event.clientX - rect.left) % 20);
-        //   const y =
-        //     event.clientY - rect.top - ((event.clientY - rect.top) % 20);
-        //   return { x: x, y: y };
-        // });
       }
     }
   };
@@ -396,8 +351,9 @@ const FlowVisualization: React.FC = () => {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+
+    const x = event.clientX - rect.left - ((event.clientX - rect.left) % 20);
+    const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
 
     // Define rectangle size
     const width = RECT_WIDTH;
@@ -440,6 +396,10 @@ const FlowVisualization: React.FC = () => {
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
 
+    // Snap to grid (same logic used in `handleCanvasClick`)
+    const snappedX = mouseX - (mouseX % 20);
+    const snappedY = mouseY - (mouseY % 20);
+
     // Check if mouse is inside any rectangle
     const hovered = drawingComponents.find((component) => {
       if (component.componentType === "Rectangle" && component.rectangleAttr) {
@@ -456,10 +416,17 @@ const FlowVisualization: React.FC = () => {
 
     setHoveredRectangle(hovered || null);
 
+    // Prevent accidental drag if user just clicks without moving
     if (draggingIndex === null || offset === null) return;
 
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    // Ensure dragging only starts when mouse moves significantly
+    const dragThreshold = 5; // Minimum movement before dragging starts
+    if (
+      Math.abs(mouseX - offset.x) < dragThreshold &&
+      Math.abs(mouseY - offset.y) < dragThreshold
+    ) {
+      return;
+    }
 
     // Find the rectangle that is being dragged
     const draggedRectangle = drawingComponents[draggingIndex];
@@ -467,12 +434,12 @@ const FlowVisualization: React.FC = () => {
       return;
 
     const prevStart = draggedRectangle.rectangleAttr.start;
-    const newStart = { x: x - offset.x, y: y - offset.y };
+    const newStart = { x: snappedX - offset.x, y: snappedY - offset.y };
     const deltaX = newStart.x - prevStart.x;
     const deltaY = newStart.y - prevStart.y;
 
-    setDrawingComponents((prev) => {
-      return prev.map((component) => {
+    setDrawingComponents((prev) =>
+      prev.map((component) => {
         // Update the dragged rectangle position
         if (component === draggedRectangle) {
           return {
@@ -521,8 +488,8 @@ const FlowVisualization: React.FC = () => {
         }
 
         return component;
-      });
-    });
+      })
+    );
   };
 
   // Handle Mouse Up (Release)
