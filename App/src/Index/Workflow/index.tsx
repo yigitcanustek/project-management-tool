@@ -17,6 +17,7 @@ interface LineComponent extends BaseComponent {
 interface RectangleComponent extends BaseComponent {
   componentType: "Rectangle";
   rectangleAttr: {
+    label?: string;
     backgroundColor: string;
     width: number;
     height: number;
@@ -48,6 +49,8 @@ type CanvasComponent = RectangleComponent | LineComponent | ConnectionComponent;
 
 const FlowVisualization: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [editingRectangle, setEditingRectangle] = useState<number | null>(null);
+  const [textValue, setTextValue] = useState<string>("");
 
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [offset, setOffset] = useState<{ x: number; y: number } | null>(null);
@@ -80,6 +83,15 @@ const FlowVisualization: React.FC = () => {
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left - ((event.clientX - rect.left) % 20);
     const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
+
+    const clickedRectangle = drawingComponents.find(
+      (rect) =>
+        rect.componentType === "Rectangle" &&
+        x > rect.rectangleAttr.start.x &&
+        x < rect.rectangleAttr.start.x + rect.rectangleAttr.width &&
+        y > rect.rectangleAttr.start.y &&
+        y < rect.rectangleAttr.start.y + rect.rectangleAttr.height
+    );
 
     if (hoveredRectangle && hoveredRectangle.componentType === "Rectangle") {
       const { start, width, height } = hoveredRectangle.rectangleAttr;
@@ -149,6 +161,8 @@ const FlowVisualization: React.FC = () => {
             },
           });
         }
+      } else if (clickedRectangle) {
+        setEditingRectangle(clickedRectangle.id);
       }
     }
   };
@@ -199,96 +213,99 @@ const FlowVisualization: React.FC = () => {
 
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        // Clear the canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!canvas) return;
 
-        // Redraw grid
-        drawGrid(ctx);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-        // Redraw all lines
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        drawingComponents.forEach((component) => {
-          if (
-            component.componentType === "Rectangle" &&
-            component.rectangleAttr
-          ) {
-            const rect = component.rectangleAttr;
+    // Redraw grid
+    drawGrid(ctx);
 
-            // Extract rectangle corners
-            const topLeft = { x: rect.start.x, y: rect.start.y };
-            const topRight = { x: rect.start.x + rect.width, y: rect.start.y };
-            const bottomLeft = {
-              x: rect.start.x,
-              y: rect.start.y + rect.height,
-            };
-            const bottomRight = {
-              x: rect.start.x + rect.width,
-              y: rect.start.y + rect.height,
-            };
+    // Redraw all lines and rectangles
+    drawingComponents.forEach((component) => {
+      if (component.componentType === "Rectangle" && component.rectangleAttr) {
+        const rect = component.rectangleAttr;
 
-            // Midpoints of each side
-            const midTop = { x: (topLeft.x + topRight.x) / 2, y: topLeft.y };
-            const midRight = {
-              x: topRight.x,
-              y: (topRight.y + bottomRight.y) / 2,
-            };
-            const midBottom = {
-              x: (bottomLeft.x + bottomRight.x) / 2,
-              y: bottomLeft.y,
-            };
-            const midLeft = { x: topLeft.x, y: (topLeft.y + bottomLeft.y) / 2 };
+        // Extract rectangle corners
+        const topLeft = { x: rect.start.x, y: rect.start.y };
+        const topRight = { x: rect.start.x + rect.width, y: rect.start.y };
+        const bottomLeft = { x: rect.start.x, y: rect.start.y + rect.height };
+        const bottomRight = {
+          x: rect.start.x + rect.width,
+          y: rect.start.y + rect.height,
+        };
 
-            // Draw the filled rectangle
+        // Midpoints of each side
+        const midTop = { x: (topLeft.x + topRight.x) / 2, y: topLeft.y };
+        const midRight = { x: topRight.x, y: (topRight.y + bottomRight.y) / 2 };
+        const midBottom = {
+          x: (bottomLeft.x + bottomRight.x) / 2,
+          y: bottomLeft.y,
+        };
+        const midLeft = { x: topLeft.x, y: (topLeft.y + bottomLeft.y) / 2 };
+
+        // Draw the filled rectangle
+        ctx.beginPath();
+        ctx.rect(rect.start.x, rect.start.y, rect.width, rect.height);
+        ctx.fillStyle = "rgba(200, 200, 255, 0.5)"; // Rectangle fill color
+        ctx.fill();
+        ctx.strokeStyle = "#333"; // Rectangle border color
+        ctx.stroke();
+
+        // Draw the rectangle label in the center
+        if (rect.label) {
+          ctx.fillStyle = "#000"; // Label text color
+          ctx.font = "16px Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle"; // Ensures proper vertical alignment
+          ctx.fillText(
+            rect.label,
+            rect.start.x + rect.width / 2, // Center X
+            rect.start.y + rect.height / 2 // Center Y
+          );
+        }
+
+        // Function to draw a small circle
+        if (hoveredRectangle === component) {
+          const drawCircle = (
+            x: number,
+            y: number,
+            radius = 5,
+            color = "#333"
+          ) => {
             ctx.beginPath();
-            ctx.rect(rect.start.x, rect.start.y, rect.width, rect.height);
-            ctx.fillStyle = "rgba(200, 200, 255, 0.5)"; // Rectangle fill color
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
             ctx.fill();
-            ctx.strokeStyle = "#333"; // Rectangle border color
             ctx.stroke();
+          };
 
-            // Function to draw a small circle
-            if (hoveredRectangle === component) {
-              const drawCircle = (
-                x: number,
-                y: number,
-                radius = 5,
-                color = "#333"
-              ) => {
-                ctx.beginPath();
-                ctx.arc(x, y, radius, 0, Math.PI * 2);
-                ctx.fillStyle = color;
-                ctx.fill();
-                ctx.stroke();
-              };
-
-              drawCircle(midTop.x, midTop.y);
-              drawCircle(midRight.x, midRight.y);
-              drawCircle(midBottom.x, midBottom.y);
-              drawCircle(midLeft.x, midLeft.y);
-            }
-          } else if (component.componentType === "Connection") {
-            const { start, end } = component.connectionAttr;
-            if (end) {
-              ctx.beginPath();
-              ctx.moveTo(
-                start.rectanglePointLocation.x,
-                start.rectanglePointLocation.y
-              );
-              ctx.lineTo(
-                end.rectanglePointLocation.x,
-                end.rectanglePointLocation.y
-              );
-              ctx.strokeStyle = "blue";
-              ctx.lineWidth = 2;
-              ctx.stroke();
-            }
-          }
-        });
+          drawCircle(midTop.x, midTop.y);
+          drawCircle(midRight.x, midRight.y);
+          drawCircle(midBottom.x, midBottom.y);
+          drawCircle(midLeft.x, midLeft.y);
+        }
+      } else if (component.componentType === "Connection") {
+        const { start, end } = component.connectionAttr;
+        if (end) {
+          ctx.beginPath();
+          ctx.moveTo(
+            start.rectanglePointLocation.x,
+            start.rectanglePointLocation.y
+          );
+          ctx.lineTo(
+            end.rectanglePointLocation.x,
+            end.rectanglePointLocation.y
+          );
+          ctx.strokeStyle = "blue";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
       }
-    }
+    });
   }, [drawGrid, drawingComponents, hoveredRectangle]);
 
   useEffect(() => {
@@ -494,6 +511,32 @@ const FlowVisualization: React.FC = () => {
     setDraggingIndex(null);
     setOffset(null);
   };
+
+  const handleTextChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setTextValue(event.target.value);
+  };
+
+  const handleTextSubmit = (
+    event:
+      | React.KeyboardEvent<HTMLInputElement>
+      | React.FocusEvent<HTMLInputElement>
+  ) => {
+    if ("key" in event && event.key !== "Enter") return; // Only submit on Enter key
+
+    setDrawingComponents((prev) =>
+      prev.map((component) =>
+        component.componentType === "Rectangle" &&
+        component.id === editingRectangle
+          ? {
+              ...component,
+              rectangleAttr: { ...component.rectangleAttr, label: textValue },
+            }
+          : component
+      )
+    );
+    setEditingRectangle(null); // Close input field
+  };
+
   return (
     <>
       <Button
@@ -513,6 +556,40 @@ const FlowVisualization: React.FC = () => {
       >
         Clear
       </Button>
+      {editingRectangle !== null &&
+        (() => {
+          const rect = drawingComponents.find(
+            (component) =>
+              component.componentType === "Rectangle" &&
+              component.id === editingRectangle
+          ) as RectangleComponent;
+
+          if (!rect) return null; // If no rectangle is found, return nothing
+
+          const { start, width, height } = rect.rectangleAttr;
+
+          return (
+            <input
+              type="text"
+              value={textValue}
+              onChange={handleTextChange}
+              onBlur={handleTextSubmit} // Save on blur
+              onKeyDown={handleTextSubmit} // Save on Enter key
+              autoFocus
+              style={{
+                position: "absolute",
+                left: `${start.x + width + 120}px`,
+                top: `${start.y + height - 50}px`,
+                transform: "translate(-50%, -50%)",
+                fontSize: "16px",
+                textAlign: "center",
+                border: "1px solid #ccc",
+                padding: "2px",
+              }}
+            />
+          );
+        })()}
+
       <canvas
         ref={canvasRef}
         onMouseMove={handleMouseMove}
