@@ -1,7 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { AppLayout } from "./Index";
-import { Board } from "./Index/Board";
-import Workflow from "./Index/Workflow";
+import { AppLayout } from "./Index/index.tsx";
+import { Board } from "./Index/Board/index.tsx";
+import Workflow from "./Index/Workflow/index.tsx";
+import React from "react";
 
 function App() {
   return (

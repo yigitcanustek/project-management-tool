@@ -18,6 +18,9 @@ const FlowVisualization: React.FC = () => {
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [offset, setOffset] = useState<{ x: number; y: number } | null>(null);
 
+  const RECT_WIDTH = 150;
+  const RECT_HEIGHT = 100;
+
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -197,8 +200,8 @@ const FlowVisualization: React.FC = () => {
     const y = event.clientY - rect.top;
 
     // Define rectangle size
-    const width = 100;
-    const height = 100;
+    const width = RECT_WIDTH;
+    const height = RECT_HEIGHT;
 
     // Check if a rectangle already exists at this position
     const exists = rectangles.some(
@@ -266,7 +269,7 @@ const FlowVisualization: React.FC = () => {
         onMouseUp={handleMouseUp}
         onClick={handleCanvasClick}
         onMouseDown={handleMouseDown}
-        onContextMenu={handleRightClick} // Handle right-click to undo
+        onContextMenu={handleRightClick}
         onDoubleClick={handleDoubleClick}
         style={{
           display: "block",
