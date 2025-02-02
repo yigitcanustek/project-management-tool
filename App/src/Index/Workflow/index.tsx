@@ -1,22 +1,74 @@
 import { Button } from "antd";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
+interface BaseComponent {
+  componentType: "Rectangle" | "Line" | "Connection";
+  id: number;
+}
+
+interface LineComponent extends BaseComponent {
+  componentType: "Line";
+  lineAttr: {
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+  };
+}
+
+interface RectangleComponent extends BaseComponent {
+  componentType: "Rectangle";
+  rectangleAttr: {
+    backgroundColor: string;
+    width: number;
+    height: number;
+    start: { x: number; y: number };
+  };
+}
+interface ConnectionComponent extends BaseComponent {
+  componentType: "Connection";
+  connectionAttr: {
+    start: {
+      rectangleId: number;
+      rectanglePointLocation: {
+        x: number;
+        y: number;
+      };
+    };
+    end?: {
+      rectangleId: number;
+      rectanglePointLocation: {
+        x: number;
+        y: number;
+      };
+    };
+  };
+}
+
+// Combined Type for all components
+type CanvasComponent = RectangleComponent | LineComponent | ConnectionComponent;
+
 const FlowVisualization: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [lastPosition, setLastPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const [lines, setLines] = useState<
-    { start: { x: number; y: number }; end: { x: number; y: number } }[]
-  >([]);
-
-  const [rectangles, setRectangles] = useState<
-    { x: number; y: number; width: number; height: number }[]
-  >([]);
 
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [offset, setOffset] = useState<{ x: number; y: number } | null>(null);
+  const [selectedMidpoint, setSelectedMidpoint] = useState<{
+    start?: {
+      rectangleId: number;
+      x: number;
+      y: number;
+    };
+    end?: {
+      rectangleId: number;
+      x: number;
+      y: number;
+    };
+  } | null>(null);
+
+  const [drawingComponents, setDrawingComponents] = useState<CanvasComponent[]>(
+    []
+  );
+  const [hoveredRectangle, setHoveredRectangle] =
+    useState<CanvasComponent | null>(null);
 
   const RECT_WIDTH = 150;
   const RECT_HEIGHT = 100;
@@ -27,34 +79,110 @@ const FlowVisualization: React.FC = () => {
       const ctx = canvas.getContext("2d");
       if (ctx) {
         const rect = canvas.getBoundingClientRect();
-        const x =
-          event.clientX - rect.left - ((event.clientX - rect.left) % 20);
-        const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
+        // const x =
+        //   event.clientX - rect.left - ((event.clientX - rect.left) % 20);
+        // const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
 
-        const rectangle = rectangles.find(
-          (rectangle) =>
-            x > rectangle.x &&
-            x < rectangle.x + rectangle.width &&
-            y > rectangle.y &&
-            y < rectangle.y + rectangle.height
-        );
-        if (!rectangle && lastPosition) {
-          ctx.beginPath();
-          ctx.moveTo(lastPosition.x, lastPosition.y);
-          ctx.lineTo(x, y);
-          ctx.strokeStyle = "#bbb"; // Line color
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          setLines((prev) =>
-            [
-              ...(prev ?? []),
-              ...[{ start: lastPosition!, end: { x, y } }],
-            ].flat()
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+
+        // const rectangle = drawingComponents.find(
+        //   (rectangle) =>
+        //     rectangle.componentType === "Rectangle" &&
+        //     x > rectangle.rectangleAttr.start.x &&
+        //     x <
+        //       rectangle.rectangleAttr.start.x + rectangle.rectangleAttr.width &&
+        //     y > rectangle.rectangleAttr.start.y &&
+        //     y < rectangle.rectangleAttr.start.y + rectangle.rectangleAttr.height
+        // );
+        // if (!rectangle && lastPosition) {
+        //   ctx.beginPath();
+        //   ctx.moveTo(lastPosition.x, lastPosition.y);
+        //   ctx.lineTo(x, y);
+        //   ctx.strokeStyle = "#bbb"; // Line color
+        //   ctx.lineWidth = 1;
+        //   ctx.stroke();
+        //   // setDrawingComponents((prev) =>
+        //   //   [
+        //   //     ...(prev ?? []),
+        //   //     ...[
+        //   //       {
+        //   //         componentType: "Rectangle" as const,
+        //   //         rectangleAttr: {
+        //   //           backgroundColor: "#000",
+        //   //           width: RECT_WIDTH,
+        //   //           height: RECT_HEIGHT,
+        //   //           start: { x: lastPosition.x, y: lastPosition.y },
+        //   //           end: { x, y },
+        //   //         },
+        //   //       },
+        //   //     ],
+        //   //   ].flat()
+        //   // );
+        // }
+        if (
+          hoveredRectangle &&
+          hoveredRectangle.componentType === "Rectangle"
+        ) {
+          const { start, width, height } = hoveredRectangle.rectangleAttr;
+
+          // Midpoints
+          const midpoints = [
+            { x: start.x + width / 2, y: start.y }, // Top
+            { x: start.x + width, y: start.y + height / 2 }, // Right
+            { x: start.x + width / 2, y: start.y + height }, // Bottom
+            { x: start.x, y: start.y + height / 2 }, // Left
+          ];
+
+          // Find the closest midpoint
+          const clickedMidpoint = midpoints.find(
+            (point) =>
+              Math.abs(mouseX - point.x) < 10 && Math.abs(mouseY - point.y) < 10
           );
+
+          if (clickedMidpoint) {
+            if (selectedMidpoint?.start) {
+              // If 'start' is already populated, store 'end' and finalize the connection
+              setDrawingComponents((prev) => [
+                ...prev,
+                {
+                  id: drawingComponents.length,
+                  componentType: "Connection",
+                  connectionAttr: {
+                    start: {
+                      rectangleId: selectedMidpoint.start!.rectangleId!,
+                      rectanglePointLocation: {
+                        x: selectedMidpoint.start!.x!,
+                        y: selectedMidpoint.start!.y!,
+                      },
+                    },
+                    end: {
+                      rectangleId: hoveredRectangle.id,
+                      rectanglePointLocation: {
+                        x: clickedMidpoint.x,
+                        y: clickedMidpoint.y,
+                      },
+                    },
+                  },
+                },
+              ]);
+
+              setSelectedMidpoint(null); // Reset after pairing
+            } else {
+              // First click: Store 'start' point
+              setSelectedMidpoint({
+                start: {
+                  rectangleId: hoveredRectangle.id,
+                  x: clickedMidpoint.x,
+                  y: clickedMidpoint.y,
+                },
+              });
+            }
+          }
         }
 
         // Update the last position
-        setLastPosition({ x, y });
+        // setLastPosition({ x, y });
       }
     }
   };
@@ -67,12 +195,14 @@ const FlowVisualization: React.FC = () => {
       // Draw dots
       for (let y = 0; y < ctx.canvas.height; y += gap) {
         for (let x = 0; x < ctx.canvas.width; x += gap) {
-          const isInsideRectangle = rectangles.some(
+          const isInsideRectangle = drawingComponents.some(
             (rect) =>
-              x > rect.x &&
-              x < rect.x + rect.width &&
-              y > rect.y &&
-              y < rect.y + rect.height
+              rect.componentType === "Rectangle" &&
+              rect.rectangleAttr &&
+              x > rect.rectangleAttr.start.x &&
+              x < rect.rectangleAttr.start.x + rect.rectangleAttr.width &&
+              y > rect.rectangleAttr.start.y &&
+              y < rect.rectangleAttr.start.y + rect.rectangleAttr.height
           );
 
           if (!isInsideRectangle) {
@@ -84,7 +214,7 @@ const FlowVisualization: React.FC = () => {
         }
       }
     },
-    [rectangles]
+    [drawingComponents]
   );
 
   useEffect(() => {
@@ -113,26 +243,87 @@ const FlowVisualization: React.FC = () => {
         drawGrid(ctx);
 
         // Redraw all lines
-        lines.forEach(({ start, end }) => {
-          ctx.beginPath();
-          ctx.moveTo(start.x, start.y);
-          ctx.lineTo(end.x, end.y);
-          ctx.strokeStyle = "#bbb";
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        });
 
-        rectangles.forEach((rect) => {
-          ctx.beginPath();
-          ctx.rect(rect.x, rect.y, rect.width, rect.height);
-          ctx.fillStyle = "rgba(200, 200, 255, 0.5)"; // Rectangle fill color
-          ctx.fill();
-          ctx.strokeStyle = "#333"; // Rectangle border color
-          ctx.stroke();
+        drawingComponents.forEach((component) => {
+          if (
+            component.componentType === "Rectangle" &&
+            component.rectangleAttr
+          ) {
+            const rect = component.rectangleAttr;
+
+            // Extract rectangle corners
+            const topLeft = { x: rect.start.x, y: rect.start.y };
+            const topRight = { x: rect.start.x + rect.width, y: rect.start.y };
+            const bottomLeft = {
+              x: rect.start.x,
+              y: rect.start.y + rect.height,
+            };
+            const bottomRight = {
+              x: rect.start.x + rect.width,
+              y: rect.start.y + rect.height,
+            };
+
+            // Midpoints of each side
+            const midTop = { x: (topLeft.x + topRight.x) / 2, y: topLeft.y };
+            const midRight = {
+              x: topRight.x,
+              y: (topRight.y + bottomRight.y) / 2,
+            };
+            const midBottom = {
+              x: (bottomLeft.x + bottomRight.x) / 2,
+              y: bottomLeft.y,
+            };
+            const midLeft = { x: topLeft.x, y: (topLeft.y + bottomLeft.y) / 2 };
+
+            // Draw the filled rectangle
+            ctx.beginPath();
+            ctx.rect(rect.start.x, rect.start.y, rect.width, rect.height);
+            ctx.fillStyle = "rgba(200, 200, 255, 0.5)"; // Rectangle fill color
+            ctx.fill();
+            ctx.strokeStyle = "#333"; // Rectangle border color
+            ctx.stroke();
+
+            // Function to draw a small circle
+            if (hoveredRectangle === component) {
+              const drawCircle = (
+                x: number,
+                y: number,
+                radius = 5,
+                color = "#333"
+              ) => {
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.stroke();
+              };
+
+              drawCircle(midTop.x, midTop.y);
+              drawCircle(midRight.x, midRight.y);
+              drawCircle(midBottom.x, midBottom.y);
+              drawCircle(midLeft.x, midLeft.y);
+            }
+          } else if (component.componentType === "Connection") {
+            const { start, end } = component.connectionAttr;
+            if (end) {
+              ctx.beginPath();
+              ctx.moveTo(
+                start.rectanglePointLocation.x,
+                start.rectanglePointLocation.y
+              );
+              ctx.lineTo(
+                end.rectanglePointLocation.x,
+                end.rectanglePointLocation.y
+              );
+              ctx.strokeStyle = "blue";
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
+          }
         });
       }
     }
-  }, [drawGrid, lines, rectangles]);
+  }, [drawGrid, drawingComponents, hoveredRectangle]);
 
   useEffect(() => {
     redrawCanvas();
@@ -142,7 +333,7 @@ const FlowVisualization: React.FC = () => {
     event.preventDefault(); // Prevent the default context menu
     // Remove the last line
 
-    setLines((prevLines) => {
+    setDrawingComponents((prevLines) => {
       const updatedLines = [...prevLines];
       updatedLines.pop(); // Remove the last line
       return updatedLines;
@@ -159,12 +350,19 @@ const FlowVisualization: React.FC = () => {
           event.clientX - rect.left - ((event.clientX - rect.left) % 20);
         const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
 
-        const index = rectangles.findIndex(
+        const index = drawingComponents.findIndex(
           (rectangle) =>
-            x >= rectangle.x &&
-            x <= rectangle.x + rectangle.width &&
-            y >= rectangle.y &&
-            y <= rectangle.y + rectangle.height
+            rectangle.componentType === "Rectangle" &&
+            x >= rectangle.rectangleAttr.start.x + 5 &&
+            x <=
+              rectangle.rectangleAttr.start.x +
+                rectangle.rectangleAttr.width -
+                5 &&
+            y >= rectangle.rectangleAttr.start.y + 5 &&
+            y <=
+              rectangle.rectangleAttr.start.y +
+                rectangle.rectangleAttr.height -
+                5
         );
 
         if (index !== -1) {
@@ -172,21 +370,23 @@ const FlowVisualization: React.FC = () => {
           setDraggingIndex(index);
 
           // Store initial offset to keep the rectangle's relative position while dragging
-          setOffset({
-            x: x - rectangles[index].x,
-            y: y - rectangles[index].y,
-          });
+          if (drawingComponents[index].componentType === "Rectangle") {
+            setOffset({
+              x: x - drawingComponents[index].rectangleAttr.start.x,
+              y: y - drawingComponents[index].rectangleAttr.start.y,
+            });
+          }
         }
 
-        setLastPosition(() => {
-          const canvas = canvasRef.current;
-          const rect = canvas!.getBoundingClientRect();
-          const x =
-            event.clientX - rect.left - ((event.clientX - rect.left) % 20);
-          const y =
-            event.clientY - rect.top - ((event.clientY - rect.top) % 20);
-          return { x: x, y: y };
-        });
+        // setLastPosition(() => {
+        //   const canvas = canvasRef.current;
+        //   const rect = canvas!.getBoundingClientRect();
+        //   const x =
+        //     event.clientX - rect.left - ((event.clientX - rect.left) % 20);
+        //   const y =
+        //     event.clientY - rect.top - ((event.clientY - rect.top) % 20);
+        //   return { x: x, y: y };
+        // });
       }
     }
   };
@@ -204,38 +404,125 @@ const FlowVisualization: React.FC = () => {
     const height = RECT_HEIGHT;
 
     // Check if a rectangle already exists at this position
-    const exists = rectangles.some(
-      (rectangle) =>
-        x >= rectangle.x &&
-        x <= rectangle.x + rectangle.width &&
-        y >= rectangle.y &&
-        y <= rectangle.y + rectangle.height
+    const exists = drawingComponents.some(
+      (rect) =>
+        rect.componentType === "Rectangle" &&
+        rect.rectangleAttr &&
+        x > rect.rectangleAttr.start.x &&
+        x < rect.rectangleAttr.start.x + rect.rectangleAttr.width &&
+        y > rect.rectangleAttr.start.y &&
+        y < rect.rectangleAttr.start.y + rect.rectangleAttr.height
     );
 
     if (!exists) {
       // Add rectangle to state if it does not already exist
-      setRectangles((prev) => [...prev, { x, y, width, height }]);
+      setDrawingComponents((prev) => [
+        ...prev,
+        {
+          componentType: "Rectangle",
+          id: drawingComponents.length,
+          rectangleAttr: {
+            backgroundColor: "#000",
+            width,
+            height,
+            start: { x: x - 75, y: y - 75 },
+          },
+        },
+      ]);
     }
   };
 
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (draggingIndex === null || offset === null) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Check if mouse is inside any rectangle
+    const hovered = drawingComponents.find((component) => {
+      if (component.componentType === "Rectangle" && component.rectangleAttr) {
+        const { start, width, height } = component.rectangleAttr;
+        return (
+          mouseX >= start.x &&
+          mouseX <= start.x + width &&
+          mouseY >= start.y &&
+          mouseY <= start.y + height
+        );
+      }
+      return false;
+    });
+
+    setHoveredRectangle(hovered || null);
+
+    if (draggingIndex === null || offset === null) return;
+
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
-    // Update rectangle position while dragging
-    setRectangles((prev) =>
-      prev.map((rectangle, i) =>
-        i === draggingIndex
-          ? { ...rectangle, x: x - offset.x, y: y - offset.y }
-          : rectangle
-      )
-    );
+    // Find the rectangle that is being dragged
+    const draggedRectangle = drawingComponents[draggingIndex];
+    if (!draggedRectangle || draggedRectangle.componentType !== "Rectangle")
+      return;
+
+    const prevStart = draggedRectangle.rectangleAttr.start;
+    const newStart = { x: x - offset.x, y: y - offset.y };
+    const deltaX = newStart.x - prevStart.x;
+    const deltaY = newStart.y - prevStart.y;
+
+    setDrawingComponents((prev) => {
+      return prev.map((component) => {
+        // Update the dragged rectangle position
+        if (component === draggedRectangle) {
+          return {
+            ...component,
+            rectangleAttr: {
+              ...component.rectangleAttr,
+              start: newStart,
+            },
+          };
+        }
+
+        // If the component is a Connection, adjust its linked points
+        if (component.componentType === "Connection") {
+          const { start, end } = component.connectionAttr;
+
+          let updatedStart = start;
+          let updatedEnd = end;
+
+          if (start.rectangleId === draggedRectangle.id) {
+            updatedStart = {
+              ...start,
+              rectanglePointLocation: {
+                x: start.rectanglePointLocation.x + deltaX,
+                y: start.rectanglePointLocation.y + deltaY,
+              },
+            };
+          }
+
+          if (end?.rectangleId === draggedRectangle.id) {
+            updatedEnd = {
+              ...end,
+              rectanglePointLocation: {
+                x: end.rectanglePointLocation.x + deltaX,
+                y: end.rectanglePointLocation.y + deltaY,
+              },
+            };
+          }
+
+          return {
+            ...component,
+            connectionAttr: {
+              start: updatedStart,
+              end: updatedEnd,
+            },
+          };
+        }
+
+        return component;
+      });
+    });
   };
 
   // Handle Mouse Up (Release)
@@ -248,9 +535,8 @@ const FlowVisualization: React.FC = () => {
       <Button
         style={{ position: "absolute" }}
         onClick={() => {
-          setLines([]); // Clear all lines
-          setLastPosition(null);
-          setRectangles([]);
+          setDrawingComponents([]); // Clear all lines
+          // setLastPosition(null);
           const canvas = canvasRef.current;
           if (canvas) {
             const ctx = canvas.getContext("2d");
