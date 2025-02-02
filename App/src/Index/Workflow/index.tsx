@@ -83,7 +83,6 @@ const FlowVisualization: React.FC = () => {
 
     if (hoveredRectangle && hoveredRectangle.componentType === "Rectangle") {
       const { start, width, height } = hoveredRectangle.rectangleAttr;
-      console.log(hoveredRectangle, x, y);
       // Ensure midpoint coordinates align with the snapped grid
       const midpoints = [
         {
@@ -111,8 +110,6 @@ const FlowVisualization: React.FC = () => {
 
         return distanceX <= 20 && distanceY <= 20; // Increased threshold to 20
       });
-
-      console.log(clickedMidpoint);
 
       if (clickedMidpoint) {
         if (selectedMidpoint?.start) {
