@@ -44,7 +44,6 @@ interface ConnectionComponent extends BaseComponent {
   };
 }
 
-// Combined Type for all components
 type CanvasComponent = RectangleComponent | LineComponent | ConnectionComponent;
 
 const FlowVisualization: React.FC = () => {
@@ -168,7 +167,6 @@ const FlowVisualization: React.FC = () => {
       const dotSize = 2;
       const gap = 20;
 
-      // Draw dots
       for (let y = 0; y < ctx.canvas.height; y += gap) {
         for (let x = 0; x < ctx.canvas.width; x += gap) {
           const isInsideRectangle = drawingComponents.some(
@@ -229,7 +227,6 @@ const FlowVisualization: React.FC = () => {
           y: rect.start.y + rect.height,
         };
 
-        // Midpoints of each side
         const midTop = { x: (topLeft.x + topRight.x) / 2, y: topLeft.y };
         const midRight = { x: topRight.x, y: (topRight.y + bottomRight.y) / 2 };
         const midBottom = {
