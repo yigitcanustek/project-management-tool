@@ -95,41 +95,38 @@ const FlowVisualization: React.FC = () => {
 
     if (hoveredRectangle && hoveredRectangle.componentType === "Rectangle") {
       const { start, width, height } = hoveredRectangle.rectangleAttr;
-      // Ensure midpoint coordinates align with the snapped grid
       const midpoints = [
         {
           x: Math.round((start.x + width / 2) / 20) * 20,
           y: Math.round(start.y / 20) * 20,
-        }, // Top
+        },
         {
           x: Math.round((start.x + width) / 20) * 20,
           y: Math.round((start.y + height / 2) / 20) * 20,
-        }, // Right
+        },
         {
           x: Math.round((start.x + width / 2) / 20) * 20,
           y: Math.round((start.y + height) / 20) * 20,
-        }, // Bottom
+        },
         {
           x: Math.round(start.x / 20) * 20,
           y: Math.round((start.y + height / 2) / 20) * 20,
-        }, // Left
+        },
       ];
 
-      // Find the closest midpoint
       const clickedMidpoint = midpoints.find((point) => {
         const distanceX = Math.abs(x - point.x);
         const distanceY = Math.abs(y - point.y);
 
-        return distanceX <= 20 && distanceY <= 20; // Increased threshold to 20
+        return distanceX <= 20 && distanceY <= 20;
       });
 
       if (clickedMidpoint) {
         if (selectedMidpoint?.start) {
-          // If `start` already exists, create the `end` and finalize connection
           setDrawingComponents((prev) => [
             ...prev,
             {
-              id: prev.length, // Ensure unique ID
+              id: prev.length,
               componentType: "Connection",
               connectionAttr: {
                 start: {
@@ -150,9 +147,8 @@ const FlowVisualization: React.FC = () => {
             },
           ]);
 
-          setSelectedMidpoint(null); // Reset after pairing
+          setSelectedMidpoint(null);
         } else {
-          // First click: Store `start` midpoint
           setSelectedMidpoint({
             start: {
               rectangleId: hoveredRectangle.id,
@@ -188,7 +184,7 @@ const FlowVisualization: React.FC = () => {
           if (!isInsideRectangle) {
             ctx.beginPath();
             ctx.arc(x, y, dotSize / 2, 0, Math.PI * 2);
-            ctx.fillStyle = "#aaa"; // Dot color
+            ctx.fillStyle = "#aaa";
             ctx.fill();
           }
         }
@@ -202,7 +198,6 @@ const FlowVisualization: React.FC = () => {
     if (canvas) {
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        // Set canvas size
         canvas.width = window.innerWidth - 210;
         canvas.height = window.innerHeight - 10;
 
@@ -218,18 +213,14 @@ const FlowVisualization: React.FC = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Redraw grid
     drawGrid(ctx);
 
-    // Redraw all lines and rectangles
     drawingComponents.forEach((component) => {
       if (component.componentType === "Rectangle" && component.rectangleAttr) {
         const rect = component.rectangleAttr;
 
-        // Extract rectangle corners
         const topLeft = { x: rect.start.x, y: rect.start.y };
         const topRight = { x: rect.start.x + rect.width, y: rect.start.y };
         const bottomLeft = { x: rect.start.x, y: rect.start.y + rect.height };
@@ -247,28 +238,25 @@ const FlowVisualization: React.FC = () => {
         };
         const midLeft = { x: topLeft.x, y: (topLeft.y + bottomLeft.y) / 2 };
 
-        // Draw the filled rectangle
         ctx.beginPath();
         ctx.rect(rect.start.x, rect.start.y, rect.width, rect.height);
-        ctx.fillStyle = "rgba(200, 200, 255, 0.5)"; // Rectangle fill color
+        ctx.fillStyle = "rgba(200, 200, 255, 0.5)";
         ctx.fill();
-        ctx.strokeStyle = "#333"; // Rectangle border color
+        ctx.strokeStyle = "#333";
         ctx.stroke();
 
-        // Draw the rectangle label in the center
         if (rect.label) {
-          ctx.fillStyle = "#000"; // Label text color
+          ctx.fillStyle = "#000";
           ctx.font = "16px Arial";
           ctx.textAlign = "center";
-          ctx.textBaseline = "middle"; // Ensures proper vertical alignment
+          ctx.textBaseline = "middle";
           ctx.fillText(
             rect.label,
-            rect.start.x + rect.width / 2, // Center X
-            rect.start.y + rect.height / 2 // Center Y
+            rect.start.x + rect.width / 2,
+            rect.start.y + rect.height / 2
           );
         }
 
-        // Function to draw a small circle
         if (hoveredRectangle === component) {
           const drawCircle = (
             x: number,
@@ -313,12 +301,11 @@ const FlowVisualization: React.FC = () => {
   }, [redrawCanvas]);
 
   const handleRightClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    event.preventDefault(); // Prevent the default context menu
-    // Remove the last line
+    event.preventDefault();
 
     setDrawingComponents((prevLines) => {
       const updatedLines = [...prevLines];
-      updatedLines.pop(); // Remove the last line
+      updatedLines.pop();
       return updatedLines;
     });
   };
@@ -345,10 +332,8 @@ const FlowVisualization: React.FC = () => {
         );
 
         if (index !== -1) {
-          // Start dragging the selected rectangle
           setDraggingIndex(index);
 
-          // Store initial offset to keep the rectangle's relative position while dragging
           if (drawingComponents[index].componentType === "Rectangle") {
             setOffset({
               x: x - drawingComponents[index].rectangleAttr.start.x,
@@ -369,11 +354,9 @@ const FlowVisualization: React.FC = () => {
     const x = event.clientX - rect.left - ((event.clientX - rect.left) % 20);
     const y = event.clientY - rect.top - ((event.clientY - rect.top) % 20);
 
-    // Define rectangle size
     const width = RECT_WIDTH;
     const height = RECT_HEIGHT;
 
-    // Check if a rectangle already exists at this position
     const exists = drawingComponents.some(
       (rect) =>
         rect.componentType === "Rectangle" &&
@@ -385,7 +368,6 @@ const FlowVisualization: React.FC = () => {
     );
 
     if (!exists) {
-      // Add rectangle to state if it does not already exist
       setDrawingComponents((prev) => [
         ...prev,
         {
@@ -410,11 +392,9 @@ const FlowVisualization: React.FC = () => {
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
 
-    // Snap to grid (same logic used in `handleCanvasClick`)
     const snappedX = mouseX - (mouseX % 20);
     const snappedY = mouseY - (mouseY % 20);
 
-    // Check if mouse is inside any rectangle
     const hovered = drawingComponents.find((component) => {
       if (component.componentType === "Rectangle" && component.rectangleAttr) {
         const { start, width, height } = component.rectangleAttr;
@@ -430,11 +410,9 @@ const FlowVisualization: React.FC = () => {
 
     setHoveredRectangle(hovered || null);
 
-    // Prevent accidental drag if user just clicks without moving
     if (draggingIndex === null || offset === null) return;
 
-    // Ensure dragging only starts when mouse moves significantly
-    const dragThreshold = 5; // Minimum movement before dragging starts
+    const dragThreshold = 5;
     if (
       Math.abs(mouseX - offset.x) < dragThreshold &&
       Math.abs(mouseY - offset.y) < dragThreshold
@@ -442,7 +420,6 @@ const FlowVisualization: React.FC = () => {
       return;
     }
 
-    // Find the rectangle that is being dragged
     const draggedRectangle = drawingComponents[draggingIndex];
     if (!draggedRectangle || draggedRectangle.componentType !== "Rectangle")
       return;
@@ -454,7 +431,6 @@ const FlowVisualization: React.FC = () => {
 
     setDrawingComponents((prev) =>
       prev.map((component) => {
-        // Update the dragged rectangle position
         if (component === draggedRectangle) {
           return {
             ...component,
@@ -465,7 +441,6 @@ const FlowVisualization: React.FC = () => {
           };
         }
 
-        // If the component is a Connection, adjust its linked points
         if (component.componentType === "Connection") {
           const { start, end } = component.connectionAttr;
 
@@ -506,7 +481,6 @@ const FlowVisualization: React.FC = () => {
     );
   };
 
-  // Handle Mouse Up (Release)
   const handleMouseUp = () => {
     setDraggingIndex(null);
     setOffset(null);
@@ -521,7 +495,7 @@ const FlowVisualization: React.FC = () => {
       | React.KeyboardEvent<HTMLInputElement>
       | React.FocusEvent<HTMLInputElement>
   ) => {
-    if ("key" in event && event.key !== "Enter") return; // Only submit on Enter key
+    if ("key" in event && event.key !== "Enter") return;
 
     setDrawingComponents((prev) =>
       prev.map((component) =>
@@ -534,7 +508,7 @@ const FlowVisualization: React.FC = () => {
           : component
       )
     );
-    setEditingRectangle(null); // Close input field
+    setEditingRectangle(null);
   };
 
   return (
@@ -542,8 +516,7 @@ const FlowVisualization: React.FC = () => {
       <Button
         style={{ position: "absolute" }}
         onClick={() => {
-          setDrawingComponents([]); // Clear all lines
-          // setLastPosition(null);
+          setDrawingComponents([]);
           const canvas = canvasRef.current;
           if (canvas) {
             const ctx = canvas.getContext("2d");
@@ -564,7 +537,7 @@ const FlowVisualization: React.FC = () => {
               component.id === editingRectangle
           ) as RectangleComponent;
 
-          if (!rect) return null; // If no rectangle is found, return nothing
+          if (!rect) return null;
 
           const { start, width, height } = rect.rectangleAttr;
 
@@ -573,8 +546,8 @@ const FlowVisualization: React.FC = () => {
               type="text"
               value={textValue}
               onChange={handleTextChange}
-              onBlur={handleTextSubmit} // Save on blur
-              onKeyDown={handleTextSubmit} // Save on Enter key
+              onBlur={handleTextSubmit}
+              onKeyDown={handleTextSubmit}
               autoFocus
               style={{
                 position: "absolute",
