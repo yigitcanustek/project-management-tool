@@ -1,5 +1,6 @@
 import Repository, { type KeyValue } from "./index.mts";
 import {
+  ObjectId,
   MongoClient,
   Collection,
   OptionalUnlessRequiredId,
@@ -16,14 +17,14 @@ export class MongoAdapter<
 {
   private client: MongoClient;
   private collection: Collection<V>;
-  private key1: string;
-  private key2: string;
+  private key1: keyof V;
+  private key2?: keyof V;
 
   constructor(
     dbName: string,
     collectionName: string,
-    key1: string,
-    key2?: string
+    key1: keyof V,
+    key2?: keyof V
   ) {
     const DB_URI = process.env.DB_URI;
     const DB_USERNAME = process.env.DB_USERNAME;
@@ -37,7 +38,8 @@ export class MongoAdapter<
     this.client = new MongoClient(mongoUri);
     this.collection = this.client.db(dbName).collection<V>(collectionName);
     this.key1 = key1;
-    if (key2) this.key2 = key2;
+    this.key2 = key2;
+
     this.client.connect().then((conn) => {
       conn.on("connectionCreated", () => {
         console.log(`DB connected on ${DB_URI}:27017`);
@@ -52,85 +54,114 @@ export class MongoAdapter<
     this.client.close();
   }
 
+  // Overloaded method signatures
+  create(value: V): Promise<KeyValue<"_id" & keyof V, V>>;
   create(key: K1, value: V): Promise<KeyValue<K1, V>>;
   create(key1: K1, key2: K2, value: V): Promise<KeyValue<K1, V, K2>>;
+
   async create(
-    key1: K1,
-    valueOrKey2: V | K2,
-    value?: V
-  ): Promise<KeyValue<K1, V> | KeyValue<K1, V, K2>> {
-    if (typeof valueOrKey2 === "object" && valueOrKey2 !== null) {
-      // Single key case
-      const document: KeyValue<K1, V> = {
-        value: valueOrKey2 as V,
-      } as KeyValue<K1, V>;
-      await this.collection.insertOne(
-        document.value as OptionalUnlessRequiredId<V>
-      );
-      return document;
-    } else if (value !== undefined) {
-      // Composite key case
-      const document: KeyValue<K1, V, K2> = {
-        key: [key1, valueOrKey2 as K2] as [K1, K2], // Explicitly cast as a tuple
-        value,
-      } as KeyValue<K1, V, K2>;
+    key1OrValue: K1 | V,
+    key2OrValue?: K2 | V,
+    maybeValue?: V
+  ): Promise<
+    KeyValue<K1, V> | KeyValue<K1, V, K2> | KeyValue<"_id" & keyof V, V>
+  > {
+    if (typeof key1OrValue === "object" && key1OrValue !== null) {
+      // No key provided, auto-generate _id
+      const document = {
+        key: ["_id"] as ["_id"],
+        value: { _id: new ObjectId().toHexString(), ...key1OrValue },
+      } as KeyValue<"_id" & keyof V, V>;
+
       await this.collection.insertOne(
         document.value as OptionalUnlessRequiredId<V>
       );
       return document;
     }
+
+    if (typeof key2OrValue === "object" && key2OrValue !== null) {
+      // Single key case
+      const document = {
+        key: [key1OrValue as K1],
+        value: key2OrValue as V,
+      } as KeyValue<K1, V>;
+
+      await this.collection.insertOne(
+        document.value as OptionalUnlessRequiredId<V>
+      );
+      return document;
+    }
+
+    if (maybeValue !== undefined) {
+      // Composite key case
+      const document = {
+        key: [key1OrValue as K1, key2OrValue as K2] as [K1, K2],
+        value: maybeValue,
+      } as KeyValue<K1, V, K2>;
+
+      await this.collection.insertOne(
+        document.value as OptionalUnlessRequiredId<V>
+      );
+      return document;
+    }
+
     throw new Error("Invalid arguments for create method.");
   }
 
-  async read(key1: V[K1], key2?: V[K2]): Promise<KeyValue<K1, V, K2>> {
-    let query: { [x: string]: V[K1] | V[K2] } = { [this.key1]: key1 };
-    if (key2 !== undefined) {
-      query = { ...query, [this.key2]: key2 };
+  async read(key1: V[K1], key2?: V[K2]): Promise<KeyValue<K1, V, K2> | null> {
+    let query: Record<string, unknown> = { [this.key1 as string]: key1 };
+
+    if (key2 !== undefined && this.key2) {
+      query[this.key2 as string] = key2;
     }
 
-    const result = await this.collection.findOne({ ...(query as Filter<V>) });
-    if (!result) {
-      throw new Error("Document not found.");
-    }
+    const result = await this.collection.findOne(query as Filter<V>);
+    if (!result) return null;
 
     return {
-      key: key2 !== undefined ? ([key1, key2] as [K1, K2]) : ([key1] as [K1]),
-      value: result,
-    } as unknown as KeyValue<K1, V, K2>;
+      key:
+        key2 !== undefined
+          ? ([key1, key2] as [V[K1], V[K2]])
+          : ([key1] as [V[K1]]),
+      value: result as V,
+    } as KeyValue<K1, V, K2>;
   }
+
   async update(
     value: Partial<V>,
     key1: V[K1],
     key2?: V[K2]
   ): Promise<KeyValue<K1, V, K2>> {
-    let query: { [x: string]: V[K1] | V[K2] } = { [this.key1]: key1 };
-    if (key2 !== undefined) {
-      query = { ...query, [this.key2]: key2 };
+    let query: Record<string, unknown> = { [this.key1 as string]: key1 };
+
+    if (key2 !== undefined && this.key2) {
+      query[this.key2 as string] = key2;
     }
 
     const result = await this.collection.findOneAndUpdate(
-      { ...(query as Filter<V>) },
+      query as Filter<V>,
       { $set: value },
       { returnDocument: "after" }
     );
 
-    if (!result._id) {
+    if (!result) {
       throw new Error("Document not found or update failed.");
     }
 
     return {
-      key: key2 !== undefined ? ([key1, key2] as [K1, K2]) : ([key1] as [K1]),
-      value: result,
-    } as unknown as KeyValue<K1, V, K2>;
+      key:
+        key2 !== undefined
+          ? ([key1, key2] as [V[K1], V[K2]])
+          : ([key1] as [V[K1]]),
+      value: result as V,
+    } as KeyValue<K1, V, K2>;
   }
 
-  async delete(
-    key1: V[K1],
-    key2?: K2 extends keyof V ? V[K2] : undefined
-  ): Promise<boolean> {
-    let query: Record<string, unknown> = { [this.key1]: key1 };
-    if (key2 !== undefined) {
-      query[this.key2] = key2;
+  async delete(key1: V[K1], key2?: V[K2]): Promise<boolean> {
+    let query: Record<string, unknown> = { [this.key1 as string]: key1 };
+
+    if (key2 !== undefined && this.key2) {
+      query[this.key2 as string] = key2;
     }
 
     const result = await this.collection.deleteOne(query as Filter<V>);

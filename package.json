@@ -2,11 +2,13 @@
   "name": "project-management-tool",
   "version": "0.1.0",
   "scripts": {
-    "dev:App": "cd App && bun run dev"
+    "dev:backend": "cd App && bun run index.mts",
+    "dev:frontend": "cd App && bun run dev",
+    "dev": "concurrently bun:dev:*"
   },
   "workspaces": [
     "App",
-    "lib/*"
+    "libs/*"
   ],
   "author": "yigitcanustek@gmail.com",
   "license": "GPL-3.0-only",

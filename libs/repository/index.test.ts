@@ -37,6 +37,6 @@ describe("MongoAdapter", () => {
     expect(deleteResult).toBe(true);
 
     // Ensure document is actually deleted
-    await expect(adapter.read("1")).rejects.toThrow("Document not found.");
+    expect(await adapter.read("1")).toBe(null);
   });
 });

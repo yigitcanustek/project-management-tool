@@ -15,13 +15,15 @@ export default interface Repository<
     atomic(CREATE | READ | UPDATE | DELETE)
   These are atomic and sequential operation which is not 
     create workload on the system */
-  create(key: K1, value: V): Promise<KeyValue<K1, V> | null>;
-  create(key1: K1, key2: K2, value: V): Promise<KeyValue<K1, V, K2> | null>;
+  create(value: V): Promise<KeyValue<"_id" & keyof V, V>>;
+  create(key1: K1, value: V): Promise<KeyValue<K1, V>>;
+  create(key1: K1, key2: K2, value: V): Promise<KeyValue<K1, V, K2>>;
+
   create(
-    key1: K1,
-    valueOrKey2: V | K2,
-    value?: V
-  ): Promise<KeyValue<K1, V>> | Promise<KeyValue<K1, V, K2>>;
+    key1OrValue?: K1 | V,
+    key2OrValue?: K2 | V,
+    maybeValue?: V
+  ): Promise<KeyValue<K1 | ("_id" & keyof V), V, K2 | undefined>>;
 
   read(key1: V[K1], key2?: V[K2]): Promise<KeyValue<K1, V, K2> | null>;
   update(
