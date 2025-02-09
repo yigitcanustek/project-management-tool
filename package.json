@@ -5,7 +5,8 @@
     "dev:App": "cd App && bun run dev"
   },
   "workspaces": [
-    "App"
+    "App",
+    "lib/*"
   ],
   "author": "yigitcanustek@gmail.com",
   "license": "GPL-3.0-only",

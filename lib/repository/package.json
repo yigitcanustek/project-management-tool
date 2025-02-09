@@ -1,0 +1,10 @@
+{
+  "type": "module",
+  "name": "repository",
+  "dependencies": {
+    "mongodb": "^6.13.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.5"
+  }
+}
