@@ -5,6 +5,8 @@ import {
   Collection,
   OptionalUnlessRequiredId,
   Filter,
+  WithId,
+  MatchKeysAndValues,
 } from "mongodb";
 
 import assert from "assert";
@@ -129,30 +131,38 @@ export class MongoAdapter<
 
   async update(
     value: Partial<V>,
-    key1: V[K1],
+    key1?: V[K1],
     key2?: V[K2]
   ): Promise<KeyValue<K1, V, K2>> {
-    let query: Record<string, unknown> = { [this.key1 as string]: key1 };
+    // Ensure `_id` is omitted to avoid immutable field error
+    const { _id, ...updatedData } = value as Partial<V & { _id: string }>;
 
-    if (key2 !== undefined && this.key2) {
-      query[this.key2 as string] = key2;
+    let query: Record<string, unknown> = {};
+    if (_id) {
+      query["_id"] = _id;
+    } else {
+      query["_id"] = new ObjectId().toHexString();
     }
 
     const result = await this.collection.findOneAndUpdate(
       query as Filter<V>,
-      { $set: value },
-      { returnDocument: "after" }
+      { $set: updatedData as MatchKeysAndValues<V> },
+      { upsert: true, returnDocument: "after" }
     );
 
     if (!result) {
       throw new Error("Document not found or update failed.");
     }
 
-    return {
-      key:
-        key2 !== undefined
+    const key =
+      key1 !== undefined
+        ? key2 !== undefined && this.key2
           ? ([key1, key2] as [V[K1], V[K2]])
-          : ([key1] as [V[K1]]),
+          : ([key1] as [V[K1]])
+        : ([] as []);
+
+    return {
+      key,
       value: result as V,
     } as KeyValue<K1, V, K2>;
   }
@@ -171,15 +181,52 @@ export class MongoAdapter<
   manyCreate(values: V[]): Promise<KeyValue<K1, V, K2>> {
     throw new Error("Method not implemented.");
   }
-  manyRead<
-    K1 extends keyof V,
-    V extends object,
-    K2 extends keyof V | undefined = undefined
-  >(
-    keys: (K2 extends keyof V ? { key1: K1; key2: K2 } : { key1: K1 })[]
+
+  async manyRead(): Promise<KeyValue<K1, V, K2>[]>; // No keys provided, return all documents
+  async manyRead(
+    keys?: (K2 extends keyof V
+      ? { key1: V[K1]; key2: V[K2] }
+      : { key1: V[K1] })[]
   ): Promise<KeyValue<K1, V, K2>[]> {
-    throw new Error("Method not implemented.");
+    let query: Filter<V> = {};
+
+    if (keys && keys.length > 0) {
+      query = {
+        $or: keys.map((entry) => {
+          const condition: Record<string, unknown> = {
+            [this.key1 as string]: entry.key1,
+          };
+          if (this.key2 && "key2" in entry) {
+            condition[this.key2 as string] = (
+              entry as { key1: V[K1]; key2: V[K2] }
+            ).key2;
+          }
+          return condition;
+        }),
+      };
+    }
+
+    const results = await this.collection.find(query).toArray();
+
+    return results.map((result) => {
+      // Explicitly assert `result` as `V`
+      const data = result as unknown as V;
+
+      const key1Value = data[this.key1] as V[K1];
+      const key2Value = this.key2 ? (data[this.key2] as V[K2]) : undefined;
+
+      const key =
+        this.key2 && key2Value !== undefined
+          ? ([key1Value, key2Value] as [V[K1], V[K2]])
+          : ([key1Value] as [V[K1]]);
+
+      return {
+        key,
+        value: data,
+      } as KeyValue<K1, V, K2>;
+    });
   }
+
   manyUpdate(values: Partial<V>[]): Promise<KeyValue<K1, V, K2>> {
     throw new Error("Method not implemented.");
   }

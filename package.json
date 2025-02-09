@@ -2,7 +2,7 @@
   "name": "project-management-tool",
   "version": "0.1.0",
   "scripts": {
-    "dev:backend": "cd App && bun run index.mts",
+    "dev:backend": "cd App && bun --watch run index.mts",
     "dev:frontend": "cd App && bun run dev",
     "dev": "concurrently bun:dev:*"
   },

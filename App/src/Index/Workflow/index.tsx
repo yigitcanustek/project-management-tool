@@ -1,7 +1,8 @@
-import { Button } from "antd";
+import { Button, Flex } from "antd";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 interface BaseComponent {
+  _id?: string;
   componentType: "Rectangle" | "Line" | "Connection";
   id: number;
 }
@@ -46,6 +47,8 @@ interface ConnectionComponent extends BaseComponent {
 
 type CanvasComponent = RectangleComponent | LineComponent | ConnectionComponent;
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 const FlowVisualization: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [editingRectangle, setEditingRectangle] = useState<number | null>(null);
@@ -74,6 +77,21 @@ const FlowVisualization: React.FC = () => {
 
   const RECT_WIDTH = 150;
   const RECT_HEIGHT = 100;
+
+  useEffect(() => {
+    async function getData() {
+      const res = await fetch(API_URL + "/workflow", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      setDrawingComponents(await res.json());
+    }
+
+    getData();
+  }, []);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -510,22 +528,53 @@ const FlowVisualization: React.FC = () => {
 
   return (
     <>
-      <Button
-        style={{ position: "absolute" }}
-        onClick={() => {
-          setDrawingComponents([]);
-          const canvas = canvasRef.current;
-          if (canvas) {
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              drawGrid(ctx);
+      <Flex gap={8} style={{ position: "absolute" }}>
+        <Button
+          onClick={async () => {
+            await fetch(API_URL + "/workflow", {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(drawingComponents.map(({ _id }) => _id)), // Send _id for deletion
+            })
+              .then(async (response) => {
+                if (!response.ok) {
+                  throw new Error("Failed to delete components.");
+                }
+
+                // Ensure that `drawingComponents` still has items before attempting to add them
+                if (drawingComponents.length > 0) {
+                  return fetch(API_URL + "/workflow", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(drawingComponents),
+                  });
+                }
+              })
+              .catch((error) => {
+                console.error("Error in DELETE or POST operation:", error);
+              });
+          }}
+        >
+          Save
+        </Button>
+        <Button
+          onClick={() => {
+            setDrawingComponents([]);
+            const canvas = canvasRef.current;
+            if (canvas) {
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawGrid(ctx);
+              }
             }
-          }
-        }}
-      >
-        Clear
-      </Button>
+          }}
+        >
+          Clear
+        </Button>
+      </Flex>
       {editingRectangle !== null &&
         (() => {
           const rect = drawingComponents.find(

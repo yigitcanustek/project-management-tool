@@ -61,24 +61,49 @@ export class Workflow {
     }
   }
 
-  getRouter(req: Request) {
+  async list() {
+    return await this.workflowDb.manyRead();
+  }
+
+  async update(workflowComponents: CanvasComponent[]) {
+    for (const component of workflowComponents) {
+      await this.workflowDb.update(component);
+    }
+  }
+
+  async delete(workflowComponentsIdList: { _id: string }[]): Promise<void> {
+    for (const { _id } of workflowComponentsIdList) {
+      await this.workflowDb.delete(_id);
+    }
+  }
+
+  async getRouter(req: Request) {
     const url = new URL(req.url);
 
     switch (url.pathname) {
-      case "/workflow/": {
+      case "/workflow": {
         switch (req.method) {
-          case "GET":
-            return new Response("Hello, Bun.js!");
+          case "GET": {
+            const res = await this.list();
+            const list = res.map((_res) => _res.value);
+            return new Response(JSON.stringify(list));
+          }
 
-          case "POST":
-            return new Response("Received a POST request!", { status: 201 });
+          case "POST": {
+            await this.create(await req.json());
+            return new Response("Ok", { status: 200 });
+          }
 
           case "PUT":
+            await this.update(await req.json());
             return new Response("Received a PUT request!", { status: 200 });
 
-          case "DELETE":
+          case "DELETE": {
+            const res = await req.json();
+            console.log(res);
+            await this.delete(res);
             return new Response("Received a DELETE request!", { status: 200 });
-
+          }
           default:
             return new Response("Method Not Allowed", { status: 405 });
         }
